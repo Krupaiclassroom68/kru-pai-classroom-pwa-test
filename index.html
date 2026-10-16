@@ -166,6 +166,13 @@ button,input{font:inherit}
 #onlineStatus[data-state="loading"]{background:#eef8ff;border-color:#cfe5f2;color:#47778f}
 #onlineStatus[data-state="error"]{background:#fff7df;border-color:#f0dda4;color:#82682d}
 
+
+/* Student install guide — isolated from classroom authentication */
+.install-card{margin-top:15px;padding:14px;border:2px solid #cde8f8;border-radius:19px;background:linear-gradient(135deg,#effaff,#fff8e8);text-align:left}
+.install-card h3{margin:0 0 6px;font-size:19px}.install-card p{margin:4px 0 10px;font-size:13px;line-height:1.6}
+.install-card .install-btn{width:100%;font-size:16px;padding:12px;background:linear-gradient(135deg,#ffcf65,#ffab70);border:0;border-radius:13px;font-weight:900;color:#593d14;cursor:pointer}
+.install-instructions{margin-top:10px;padding:11px;border-radius:12px;background:white;border:1px solid #d5e9f1;font-size:13px;line-height:1.8}
+.install-instructions[hidden],.install-card[hidden]{display:none!important}
 </style>
 </head>
 <body>
@@ -238,6 +245,35 @@ function updateLoginStatus(text,state){
   el.textContent=text;
   el.dataset.state=state||'';
 }
+
+// Optional install UX; does not touch student access, daily code or game sessions.
+let deferredInstallPrompt=null;
+const isInstalled=()=>window.matchMedia('(display-mode: standalone)').matches||window.navigator.standalone===true;
+const isIOS=()=>/iPhone|iPad|iPod/i.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+const isAndroid=()=>/Android/i.test(navigator.userAgent);
+function updateInstallCard(){
+  const card=$('installCard');
+  if(card)card.hidden=isInstalled()||!(isIOS()||isAndroid());
+}
+window.addEventListener('beforeinstallprompt',e=>{
+  e.preventDefault();deferredInstallPrompt=e;updateInstallCard();
+});
+window.addEventListener('appinstalled',()=>{deferredInstallPrompt=null;updateInstallCard()});
+async function showInstallGuide(){
+  const out=$('installInstructions');if(!out)return;
+  if(deferredInstallPrompt){
+    const prompt=deferredInstallPrompt;deferredInstallPrompt=null;
+    try{await prompt.prompt();await prompt.userChoice;}catch(e){}
+    updateInstallCard();return;
+  }
+  if(isIOS()){
+    out.textContent='สำหรับ iPhone/iPad: เปิดหน้านี้ด้วย Safari → แตะปุ่มแชร์ (สี่เหลี่ยมมีลูกศรขึ้น) → เลือก “เพิ่มไปยังหน้าจอโฮม” → กด “เพิ่ม” หากเปิดจาก LINE ให้เลือกเปิดใน Safari ก่อน';
+  }else{
+    out.textContent='สำหรับ Android: เปิดหน้านี้ด้วย Chrome → แตะเมนู ⋮ → เลือก “ติดตั้งแอป” หรือ “เพิ่มไปยังหน้าจอหลัก” → ยืนยัน หากเปิดจาก LINE ให้เลือกเปิดใน Chrome ก่อน';
+  }
+  out.hidden=false;
+}
+
 function renderLogin(){
   session={student:null,classroom:null};
   $('app').innerHTML=`<div class="card login">
@@ -250,10 +286,17 @@ function renderLogin(){
     <button id="retryBtn" class="btn" style="display:none;margin-top:8px" onclick="loadData()">🔄 ลองเชื่อมต่อใหม่</button>
     <div id="err" class="error"></div>
     <div class="notice">🔑 Daily Code ใช้สำหรับสิทธิ์เข้าเรียนของวันนี้เท่านั้น</div>
+    <section class="install-card" id="installCard" hidden>
+      <h3>📲 ติดตั้ง Kru Pai Classroom</h3>
+      <p>ติดตั้งครั้งเดียว ครั้งหน้าแตะไอคอนบนหน้าจอมือถือได้เลย ไม่ต้องสแกน QR อีก!</p>
+      <button class="install-btn" type="button" onclick="showInstallGuide()">✨ ติดตั้งแอปบนมือถือ</button>
+      <div class="install-instructions" id="installInstructions" hidden role="status"></div>
+    </section>
   </div>`;
   $('code').addEventListener('keydown',e=>{if(e.key==='Enter')$('dailyCode')?.focus()});
   $('dailyCode').addEventListener('keydown',e=>{if(e.key==='Enter')login()});
   setTimeout(()=>$('code')?.focus(),100);
+  updateInstallCard();
   if(onlineReady) updateLoginStatus(`🟢 ห้องเรียนพร้อม • ${DATA?.classrooms?.length||0} Classroom`,'ok');
   else loadData();
 }
